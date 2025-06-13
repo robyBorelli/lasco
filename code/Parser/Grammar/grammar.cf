@@ -1,0 +1,68 @@
+-- Tokens
+token VariableSymbol (upper (letter | digit | '_')*) ;
+token BasicSymbol (lower (letter | digit | '_')*) ;
+
+-- Entrypoint
+Task.               Program ::= [Declaration] ;
+
+-- ASP syntax
+AspRule.            Declaration ::= AspDeclaration ;
+NormalRule.         AspDeclaration ::= Head ":-" [Literal] ; 
+Fact.               AspDeclaration ::= Atom ; 
+Denial.             AspDeclaration ::= ":-" [Literal] ;
+Range.              AspDeclaration ::= BasicSymbol "(" Integer ".." Integer ")" ;
+SimpleHead.         Head ::= Atom ;
+ChoiceHead.         Head ::= Bound "{" [ChoiceElem] "}" Bound ;
+ExplicitBound.      Bound ::= Integer ;     
+ImplicitBound.      Bound ::= ;
+GuardedChoiceElem.  ChoiceElem ::= Atom ":" [Literal] ;
+SimpleChoiceElem.   ChoiceElem ::= Atom ;
+
+-- Atoms, Terms and Literals
+SimpleAtom.         Atom ::= BasicSymbol ;
+CompositeAtom.      Atom ::= BasicSymbol "(" [Term] ")" ;
+Constant.           Term ::= BasicSymbol ;
+ArithmeticTerm.     Term ::= ArithmeticExpr ;
+StringTerm.         Term ::= String ;
+TupleTerm.          Term ::= "(" Term "," [Term] ")" ;
+PositiveLiteral.    Literal ::= Atom ;
+NegativeLiteral.    Literal ::= "not" Atom ;
+ComparisonLiteral.  Literal ::= Term CompOp Term ;
+
+-- Mathematical operators
+CompOpLe.           CompOp ::= "<"  ;            
+CompOpLeq.          CompOp ::= "<=" ;            
+CompOpGe.           CompOp ::= ">"  ;            
+CompOpGeq.          CompOp ::= ">=" ;
+CompOpEq.           CompOp ::= "="  ;  
+CompOpEqq.          CompOp ::= "=="  ;           
+CompOpNeq.          CompOp ::= "!=" ;
+
+-- Mathematical expressions with precedence
+AddExpr.            ArithmeticExpr ::= ArithmeticExpr "+" ArithmeticExpr1 ;
+SubExpr.            ArithmeticExpr ::= ArithmeticExpr "-" ArithmeticExpr1 ;
+MulExpr.            ArithmeticExpr1 ::= ArithmeticExpr1 "*" ArithmeticExpr2 ;
+DivExpr.            ArithmeticExpr1 ::= ArithmeticExpr1 "/" ArithmeticExpr2 ;
+NegExpr.            ArithmeticExpr2 ::= "-" ArithmeticExpr3 ;
+AbsExpr.            ArithmeticExpr3 ::= "|" ArithmeticExpr4 "|" ;
+Variable.           ArithmeticExpr4 ::= VariableSymbol ;
+IntExpr.            ArithmeticExpr4 ::= Integer ;
+coercions ArithmeticExpr 4 ;
+
+-- Examples
+PositiveExample.    Declaration ::= "#pos" Example ;
+NegativeExample.    Declaration ::= "#neg" Example ;
+LasExample.         Example ::= "(" "{" [Atom] "}" "," "{" [Atom] "}" ")" ;
+LasCtxExample.      Example ::= "(" "{" [Atom] "}" "," "{" [Atom] "}" "," "{" [AspDeclaration] "}" ")" ;
+
+-- Hypothesis
+Hypothesis.      Declaration ::= Integer "~" AspDeclaration ;
+
+comment "%" ;
+separator nonempty Literal "," ;
+separator Atom "," ;
+separator nonempty ChoiceElem ";" ;
+terminator AspDeclaration "." ;
+separator nonempty Term "," ;
+terminator nonempty Declaration "." ;
+entrypoints Program ;

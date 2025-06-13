@@ -1,0 +1,25 @@
+# Cartelle di build temporanee
+code/dist/
+code/dist-newstyle/
+code/.cabal-sandbox/
+code/cabal.sandbox.config
+
+# File di log o temporanei
+*.hi
+*.o
+*.exe
+*.out
+*.log
+
+# Cabal build cache
+code/cabal.project.local
+code/cabal.project.local~ 
+
+# Backup o editor
+*~
+*.swp
+.DS_Store
+
+# VSCode e altri IDE
+.vscode/
+.idea/
