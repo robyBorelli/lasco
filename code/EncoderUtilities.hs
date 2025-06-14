@@ -12,6 +12,8 @@ choiceRuleHead = predicatePrefix ++ "choice_rule"
 choiceRuleStructureHead = predicatePrefix ++ "choice_rule_structure_"
 choiceRuleGuardedHead= predicatePrefix ++ "choice_rule_guarded_head_"
 choiceVar = predicatePrefix ++ "choice_var_"
+ltrue = (PositiveLiteral (SimpleAtom (BasicSymbol "lasco_true")))
+ldummy = (PositiveLiteral (SimpleAtom (BasicSymbol "lasco_dummy")))
 simpleTermVariable str = ArithmeticTerm (Variable (VariableSymbol (str)))
 termVariable str = simpleTermVariable (variablePrefix++str)
 intTerm index = ArithmeticTerm (IntExpr index)
@@ -115,7 +117,7 @@ collect atomType symbolType decls = Set.fromList [ a | d <- decls, a <- extractA
       (NonGround) -> (not . isGroundAtom )
       (AllSymbols) -> (\x -> True)
     extractAtoms :: Declaration -> [Atom]
-    extractAtoms (AspRule (NormalRule h body)) = filter (filterSymbols) (headAtoms h ++ bodyAtoms body)
+    extractAtoms (AspRule (NormalRule h body)) = filter (filterSymbols) (headAtoms h ++ litsAtoms body)
     extractAtoms (PositiveExample (LasExample pos neg)) = 
       if (symbolType == Ground && ((foldr (&&) True (map filterSymbols (pos++neg))) == False))
         then error "Examples require ground atoms"
@@ -127,13 +129,17 @@ collect atomType symbolType decls = Set.fromList [ a | d <- decls, a <- extractA
     extractAtoms (Hypothesis _ _ aspDecl) = extractAtoms (AspRule aspDecl)
     extractAtoms _ = []
     headAtoms (SimpleHead a) = filter (filterSymbols) [a]
-    headAtoms _ = []
-    bodyAtoms = concatMap litAtoms
+    headAtoms (ChoiceHead _ choices _) = filter (filterSymbols) (foldr (++) [] (map choiceAtoms choices))
+    choiceAtoms (GuardedChoiceElem at lits) = filter (filterSymbols) ([at] ++ litsAtoms lits)
+    choiceAtoms (SimpleChoiceElem at) = filter (filterSymbols) [at]
+    choiceAtoms (FakeChoiceElem lit) = filter (filterSymbols) (litAtoms lit)
+    litsAtoms = concatMap litAtoms
     litAtoms (PositiveLiteral a) = if atomType /= NegativeAtoms then filter (filterSymbols) [a] else []
     litAtoms (NegativeLiteral a) = if atomType /= PositiveAtoms then filter (filterSymbols) [a] else []
     litAtoms _ =[] 
-    --assumption. if a variable appears in a comparison literal,
+    --assumption 1. if a variable appears in a comparison literal,
     -- then it must also appear in a positive literal
+    --assumption 2. no predicate symbol appears in comparison.
 
 
  

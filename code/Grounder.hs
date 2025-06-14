@@ -33,7 +33,7 @@ ground lastIndex printMode p = do
               exitFailure
             Right (Task parsedGrounded) -> do
               printStrLn printMode (printTree (Task parsedGrounded))
-              let (parsedGrounded',guardedHeads) = filterGuardedHeads parsedGrounded
+              let (parsedGrounded',guardedHeads) = filterGuardedHeads .filterDummies $ parsedGrounded
               let (newProgram) =  (Task ( ((decodeCardConstraints choiceStructures guardedHeads) . decodeHypos $ parsedGrounded') ++ examples ++ facts) )
               newProgram' <- case choiceStructures of
                 [] -> return newProgram
@@ -60,6 +60,19 @@ isFact :: Declaration -> Bool
 isFact (AspRule (NormalRule (SimpleHead _ ) [])) = True
 isFact (AspRule (Fact _)) = True
 isFact _ = False
+
+filterDummies :: [Declaration] -> [Declaration]
+filterDummies = filter (not . isDummy)
+
+
+isDummy (AspRule (NormalRule _ body)) = ret
+ where
+  l = length body
+  l' = length (filter (\x -> x /= ldummy) body)
+  ret = case l == l' of
+    True -> False
+    False -> True
+isDummy _ = False
 
 filterGuardedHeads:: [Declaration] -> ([Declaration],[Declaration])
 filterGuardedHeads [] = ([],[])
@@ -107,12 +120,13 @@ decodeCardRule choices guards ( NormalRule (SimpleHead (CompositeAtom (BasicSymb
         (ArithmeticTerm (IntExpr lb)) = elb
         (ArithmeticTerm (IntExpr ub)) = eub
 
-        removeLascoTrue lits = filter (\x -> x /= ((PositiveLiteral (SimpleAtom (BasicSymbol "lasco_true"))))) lits
+        removeLascoTrue lits = filter (\x -> x /= ltrue) lits
         removeLascoHypo lits = filter (\x -> case x of 
           ((PositiveLiteral (CompositeAtom (BasicSymbol str) _ ))) | str == hypoHead -> False
           _ -> True) lits
         body' = removeLascoTrue body
-        ret = (GroundCardConstraint lb heads ub body') 
+        --ret = (GroundCardConstraint lb heads ub body') 
+        ret = (NormalRule (ChoiceHead (ExplicitBound lb) [SimpleChoiceElem at | (PositiveLiteral at) <- heads] (ExplicitBound ub)) body')
         bindings = createBindings var
         createBindings :: [Term] -> [(ArithmeticExpr, Either Integer String)]
         createBindings [] = []
@@ -185,7 +199,7 @@ encodeGroundAtoms decls = choices ++ decls
 execGringo::String -> IO String 
 execGringo asp = do
     let prog = "gringo"
-    let cmd = proc prog ["--warn=no-atom-undefined", "--text"]
+    let cmd = proc prog ["--text"]
     (Just hin, Just hout, Just herr, ph) <- createProcess cmd { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
     hPutStr hin asp
     hClose hin

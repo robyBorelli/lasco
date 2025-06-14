@@ -60,7 +60,7 @@ encodeDisjunctiveNegative (Task decls) = prog'
     hypospace = getHypoSpace decls
     as = [(AspRule decl) | (AspRule decl) <- decls]
       ++ [(AspRule (NormalRule h (b ++ [(PositiveLiteral . atomH $ [ intTerm  index])]))) | (Hypothesis index _ (NormalRule h b)) <- hypospace ]
-    asForm = asFormula (Task as)
+    (asForm, loops) = asFormula (Task as)
     negForm = negFormula (Task decls)
     finalForm = negationNormalForm (Implies asForm negForm)
     vars = collectVars finalForm
@@ -69,6 +69,7 @@ encodeDisjunctiveNegative (Task decls) = prog'
     prog' = Task (
       prog ++
       [Comment ("As formula: "++ (show asForm))] ++
+      [Comment ("Loops found: "++ (show loops))] ++
       [Comment ("Neg formula: "++ (show negForm))] ++
       [Comment ("nnf: "++ (show finalForm))])
     partition :: [String] -> ([String], [String])
@@ -119,8 +120,8 @@ iffFormula (Task decls) = makeConjunction ruleFormulas
     where bodyList = [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- b]
                   ++ [ (Atomic . NegAtom . printTree $ a) | (NegativeLiteral a) <- b]
 
-loopFormula :: Program -> Formula
-loopFormula (Task decls) = ret
+loopFormula :: Program -> (Formula, Int)
+loopFormula (Task decls) = (ret, length loops)
   where graph = buildGraph decls
         loops = findAllLoops graph
         ret = case loops of
@@ -131,15 +132,17 @@ loopFormula (Task decls) = ret
         atomIntersect :: [Atom] -> [Parser.AbsGrammar.Literal] -> [Atom]
         atomIntersect heads lits = ret
           where posAtoms = [at | (PositiveLiteral at) <- lits]
-                ret = Set.toList ((Set.fromList heads) `Set.difference` (Set.fromList posAtoms))
+                ret = Set.toList ((Set.fromList heads) `Set.intersection` (Set.fromList posAtoms))
         lf l = (Implies (lhs l) (rhs (getBodies l)))
         lhs hs = makeDisjunction [ (Atomic . Atom . printTree $ a) | a <- hs]
-        rhs litss = makeDisjunction' [makeConjunction' ( [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- lits]
+        rhs litss = makeDisjunction' [
+                  makeConjunction' ( 
+                     [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- lits]
                   ++ [ (Atomic . NegAtom . printTree $ a) | (NegativeLiteral a) <- lits] ) | lits <- litss]
-asFormula :: Program -> Formula
-asFormula p = ret
+asFormula :: Program -> (Formula, Int)
+asFormula p = (ret, n)
   where iff =(iffFormula p)
-        loop = (loopFormula p)
+        (loop, n) = (loopFormula p)
         ret = case loop of
           res | res == true -> iff
           _ ->  (And iff loop)

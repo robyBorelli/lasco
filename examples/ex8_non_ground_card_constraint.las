@@ -5,6 +5,7 @@ magic(3).
 2 ~ 0{happy_num(X); sad_num(X)}2 :- num(X).
 
 #pos({happy_num(2)}, {}).
+#pos({happy_num(2), sad_num(2)}, {}).
 #neg({sad_num(3)},{}).
 
 

@@ -38,11 +38,10 @@ convertChoiceNormalRules (NormalRule (ChoiceHead lb choices ub) body) | (foldr (
   do idx <- genNewIndex
      let r1 = (NormalRule (SimpleHead (CompositeAtom (BasicSymbol choiceRuleHead) ([intTerm . toInteger $ idx]++ processVars vars))) (ltrue:body))
      let r2 = (NormalRule (SimpleHead (CompositeAtom (BasicSymbol choiceRuleStructureHead) ([intTerm . toInteger $ idx, intTerm realLb, intTerm realUb] ++ (map choiceToTerm simpleChoices)) )) (ltrue:body))
-     return ([r1,r2]++(rs idx))
+     return ([r1,r2]++(rs idx)++dummies)
  where 
   (simpleChoices, guardedChoices) = ([c | c@(SimpleChoiceElem _) <- choices], [ c | c@(GuardedChoiceElem _ _) <- choices])
   n = toInteger (length choices)
-  ltrue = (PositiveLiteral (SimpleAtom (BasicSymbol "lasco_true")))
   realLb = case lb of 
     (ExplicitBound i) -> i
     (ImplicitBound) -> 0
@@ -64,7 +63,10 @@ convertChoiceNormalRules (NormalRule (ChoiceHead lb choices ub) body) | (foldr (
                       (SimpleAtom (BasicSymbol s)) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) [intTerm . toInteger $ idx])
                       (CompositeAtom (BasicSymbol s) ts) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) ((intTerm . toInteger $ idx):ts))
   createGuardedRule _ _ = error "Unsupported guarded choice element" 
-  
+  dummies = [createDummy c | c <- choices]
+  createDummy (SimpleChoiceElem at) = (NormalRule (SimpleHead at) (ldummy:body))
+  createDummy (GuardedChoiceElem at lits) = (NormalRule (SimpleHead at) (lits++(ldummy:body)))
+
 convertChoiceNormalRules (NormalRule (ChoiceHead lb choices ub) body) = return [ret]
  where
   n = toInteger (length choices)
@@ -75,7 +77,7 @@ convertChoiceNormalRules (NormalRule (ChoiceHead lb choices ub) body) = return [
     (ExplicitBound i) -> i
     (ImplicitBound) -> n
   ret = case (realLb, realUb) of
-    (0,n) -> (GroundChoiceRule (map (\(SimpleChoiceElem a) -> a ) choices) body)
+    (0,val) | val == n -> (GroundChoiceRule (map (\(SimpleChoiceElem a) -> a ) choices) body)
     (_,_) -> (GroundCardConstraint realLb (map (\(SimpleChoiceElem a) -> (PositiveLiteral a) ) choices) realUb body)
 convertChoiceNormalRules other = return [other]
 
