@@ -3,6 +3,7 @@ module Logic where
 import Data.List (intercalate)
 import Control.Monad.State
 import Data.List (nub)
+import qualified Data.Set as S
 
 type Var = String
 data Literal = Atom Var
@@ -16,6 +17,7 @@ data Formula = Atomic Literal
              | And Formula Formula
              | Implies Formula Formula
              | Iff Formula Formula
+             | FTrue | FFalse
   deriving (Eq) 
 
 data PrintMode = Latex | Human
@@ -23,27 +25,36 @@ data PrintMode = Latex | Human
 data Operator = And_op | Or_op | Not_op | Implies_op | Iff_op
   deriving(Eq)
 
-true = Or (Atomic . Atom $ "p") (Atomic . NegAtom $ "p")
-false = And (Atomic . Atom $ "p") (Atomic . NegAtom $ "p")
-makeConjunction l = foldl (And) (head l) (tail l)
-makeDisjunction l = foldl (Or) (head l) (tail l)
+makeConjunction l = ret
+  where
+   false = filter (\x -> x == FFalse) l
+   l' = filter (\x -> x /= FTrue) l
+   ret = case (false, l') of 
+            ([], []) -> FFalse
+            ([], _) -> foldl (And) (head l') (tail l') 
+            (_,_) -> FFalse
 
-makeDisjunction' [] = false
-makeDisjunction' f = makeDisjunction f
+makeDisjunction l = ret
+  where
+   false = filter (\x -> x == FTrue) l
+   l' = filter (\x -> x /= FFalse) l
+   ret = case (false, l') of 
+            ([], []) -> FFalse
+            ([], _) -> foldl (Or) (head l') (tail l') 
+            (_,_) -> FTrue
 
-makeConjunction' [] = false
-makeConjunction' f = makeConjunction f
-
-collectVars (Atomic (Atom v)) = [v]
-collectVars (Atomic (NegAtom v)) = [v]
-collectVars (Not f1) = collectVars f1
-collectVars (Or f1 f2) = nub ((collectVars f1) ++ (collectVars f2)) 
-collectVars (And f1 f2) = nub ((collectVars f1) ++ (collectVars f2))
-collectVars (Implies f1 f2) = nub ((collectVars f1) ++ (collectVars f2))
-collectVars (Iff f1 f2) = nub ((collectVars f1) ++ (collectVars f2)) 
-
-
-collectCnfVars (Cnf clauses) = collectVars . makeConjunction $ (map (\(Clause lits) ->  makeDisjunction (map Atomic lits)) clauses)
+collectVars :: Formula -> [Var]
+collectVars = S.toList . go
+  where
+    go (Atomic (Atom v))     = S.singleton v
+    go (Atomic (NegAtom v))  = S.singleton v
+    go (Not f)               = go f
+    go (Or f1 f2)            = S.union (go f1) (go f2)
+    go (And f1 f2)           = S.union (go f1) (go f2)
+    go (Implies f1 f2)       = S.union (go f1) (go f2)
+    go (Iff f1 f2)           = S.union (go f1) (go f2)
+    go  FTrue                = S.empty
+    go  FFalse               = S.empty
 
 printMode = Human
 printSpace = 1
@@ -68,6 +79,9 @@ instance Show Formula where
   show (And f1 f2) = "(" ++ ( show f1 ++ show And_op ++ show f2 ) ++ ")"
   show (Implies f1 f2) = "(" ++ ( show f1 ++ show Implies_op ++ show f2 ) ++ ")"
   show (Iff f1 f2) = "(" ++ ( show f1 ++ show Iff_op ++ show f2 ) ++ ")"
+  show (FFalse) = "false"
+  show (FTrue) = "true"
+
 
 type TseitinState = State Int
 
@@ -154,9 +168,40 @@ phi_neg = (Or nq p)
 phi = (Implies phi_as phi_neg)
 
 negationNormalForm :: Formula -> Formula
-negationNormalForm = nnf . eliminateArrows
+negationNormalForm = nnf . simplify . eliminateArrows
+
+simplify :: Formula -> Formula
+simplify FTrue              = FTrue
+simplify FFalse             = FFalse
+simplify (Atomic l)         = Atomic l
+simplify (Not f)            = ret
+    where f' = simplify f 
+          ret = case (f) of
+            (FFalse)-> FTrue
+            (FTrue)-> FFalse
+            _ -> (Not f')
+simplify (And f1 f2)        = ret 
+    where f1' = simplify f1 
+          f2' = simplify f2
+          ret = case (f1',f2') of
+            (FFalse,_)-> FFalse
+            (_,FFalse)-> FFalse
+            (FTrue,_)-> f2'
+            (_,FTrue)-> f1'
+            _ -> (And f1' f2')
+simplify (Or f1 f2)         = ret 
+    where f1' = simplify f1 
+          f2' = simplify f2
+          ret = case (f1',f2') of
+            (FFalse,_)-> f2'
+            (_,FFalse)-> f1'
+            (FTrue,_)-> FTrue
+            (_,FTrue)-> FTrue
+            _ -> (Or f1' f2')
 
 eliminateArrows :: Formula -> Formula
+eliminateArrows FTrue              = FTrue
+eliminateArrows FFalse             = FFalse
 eliminateArrows (Atomic l)         = Atomic l
 eliminateArrows (Not f)            = Not (eliminateArrows f)
 eliminateArrows (And f1 f2)        = And (eliminateArrows f1) (eliminateArrows f2)
@@ -176,5 +221,10 @@ nnf (Not f) = case f of
   Not f'              -> nnf f'                            -- ¬¬A ≡ A
   And f1 f2           -> Or (nnf (Not f1)) (nnf (Not f2))  -- ¬(A ∧ B) ≡ ¬A ∨ ¬B
   Or f1 f2            -> And (nnf (Not f1)) (nnf (Not f2)) -- ¬(A ∨ B) ≡ ¬A ∧ ¬B
+  FTrue               -> FFalse
+  FFalse              -> FTrue
+
 nnf (And f1 f2)       = And (nnf f1) (nnf f2)
 nnf (Or f1 f2)        = Or (nnf f1) (nnf f2)
+nnf FTrue              = FTrue
+nnf FFalse             = FFalse

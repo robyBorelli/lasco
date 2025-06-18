@@ -114,8 +114,8 @@ optionsParser = Options
        <> short 'v'
        <> help "Prints intermediate steps and comments useful for debugging." )
   <*> switch
-      ( long "no-comments"
-       <> help "Disables comments in the encoding." )
+      ( long "enable-comments"
+       <> help "Enables comments in the encoding." )
   <*> hypoParser
 
 -- parser info

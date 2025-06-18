@@ -15,14 +15,44 @@ import Grounder
 import InputParser
 import EncoderUtilities
 import Printer
+import Control.DeepSeq (deepseq, NFData)
+import System.CPUTime (getCPUTime)
+import Text.Printf (printf)
+
+
+-- time measures
+timePure :: NFData a => a -> IO (Double, a)
+timePure expr = do
+  start <- getCPUTime
+  expr `deepseq` return ()
+  end <- getCPUTime
+  let elapsed :: Double
+      elapsed = fromIntegral (end - start) / (10^12)
+  return (elapsed, expr)
+
+
+timeIO :: IO a -> IO (Double, a)
+timeIO action = do
+  start <- getCPUTime
+  result <- action
+  end <- getCPUTime
+  let elapsed = fromIntegral (end - start) / 1e12
+  return (elapsed, result)
+
+
 -- main program
 main :: IO ()
 main = do
+
+
+  putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
+  putStrLn "%% -------------- LASCO --------------- %%\n"
+  putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
+  tStart <- getCPUTime
   Options{inputFile, outputFile, encoder, solver, solveMode, verbose, commenter, hypoPrinter} <- execParser opts
   let initialText = (case inputFile of 
-                     (Nothing) -> "lasco\nReading from stdin\n"
+                     (Nothing) -> "%% reading from stdin %%%%%%%%%%%%%%%%%%%\n"
                      (Just inPath) -> "")
-  --let printMode = not silentMode
   let printMode = verbose
   putStr initialText
 
@@ -32,15 +62,15 @@ main = do
 
   case (parse Tight) source of
     Left err -> do
-      putStrLn "parsing failed:"
+      putStrLn "%% parsing failed:%%%%%%%%%%%%%%%%%%%%%%%%"
       putStrLn err
       exitFailure
     Right prog -> do
       let hypoProg = transformHypoSpaceP prog (\hypo -> [ (Hypothesis num w h) | (num, (Hypothesis _ w h)) <- zip [1..] hypo])
       let hypoSpace = getHypoSpaceP hypoProg
-      let (normProg, lastIndex) = (normalize 0) hypoProg
+      (tNorm, (normProg, lastIndex)) <- timePure ((normalize 0) hypoProg)
 
-      printStrLn printMode ("@@@@@@@@@@@@@@@ normalized program:\n"++(printTree normProg))
+      printStrLn printMode ("%% normalized program: %%%%%%%%%%%%%%%%%%%\n"++(printTree normProg))
 
       case hypoPrinter of 
         (Just list) -> do
@@ -53,23 +83,48 @@ main = do
                   )
               )
         Nothing -> do
-            groundProg <- ground lastIndex printMode normProg
-            let finalProg = groundProg
-            let groundHypoSpace = getHypoSpaceP finalProg
-            let aspCode = (printTree) 
-                           . (removeComments commenter)
-                           . (optimize solveMode solver groundHypoSpace)
-                           . (printSolution solver hypoSpace)
-                           . (encode encoder) 
-                           $ finalProg
+            (tGround, tEnc,tSolve) <- case getExamplesP normProg of
+              [] -> do
+                      putStrLn "%% The task contain no examples %%%%%%%%%%"
+                      return (0,0,0)
+              _->   do
+                      (tGround, groundProg) <- timeIO (ground lastIndex printMode normProg)
+                      let finalProg = groundProg
+                      let groundHypoSpace = getHypoSpaceP finalProg
+                      (tEnc, aspCode) <- timePure (  (printTree) 
+                                                   . (removeComments (not commenter))
+                                                   . (optimize solveMode solver groundHypoSpace)
+                                                   . (printSolution solver hypoSpace)
+                                                   . (encode encoder) 
+                                                   $ finalProg)
+                      putStrLn "\n\n%% encoding completed %%%%%%%%%%%%%%%%%%%%\n\n"
 
-            case outputFile of
-              Just outPath -> writeFile outPath aspCode
-              Nothing      -> printStrLn (printMode || solver == Nothing) aspCode
 
-            case solver of
-              (Nothing) -> return ()
-              (Just solverType)  -> do
-                out <- solve solveMode solverType aspCode
-                putStrLn "\n\n@@@@@@@@@@@@@@@ encoding completed\n\n"
-                putStrLn out
+                      case outputFile of
+                        Just outPath -> writeFile outPath aspCode
+                        Nothing      -> printStrLn (printMode || solver == Nothing) aspCode
+
+                      tSolve <- case solver of
+                        (Nothing) -> return 0
+                        (Just solverType)  -> do
+                          (tSolve, out) <- timeIO (solve solveMode solverType aspCode)
+                          --out' <- out
+                          putStrLn out
+                          return tSolve
+
+                      return (tGround, tEnc,tSolve)
+
+            tEnd <- getCPUTime
+            let tTotal:: Double 
+                tTotal = fromIntegral (tEnd - tStart) / (10^12)
+
+            putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
+            putStrLn "%% ---------- ELAPSED TIME (s) -------- %%\n"
+            printf   "%% normalization:     %.6f s\n" tNorm
+            printf   "%% grounding:         %.6f s\n" tGround
+            printf   "%% encoding:          %.6f s\n" tEnc
+            printf   "%% tsolve:            %.6f s\n" tSolve
+            putStrLn "%% ____________________________________ %%\n"
+            printf   "%% total:             %.6f s\n" tTotal
+            putStrLn "%% ----------------- END -------------- %%\n"
+            putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"

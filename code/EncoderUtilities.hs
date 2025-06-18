@@ -17,6 +17,7 @@ ldummy = (PositiveLiteral (SimpleAtom (BasicSymbol "lasco_dummy")))
 simpleTermVariable str = ArithmeticTerm (Variable (VariableSymbol (str)))
 termVariable str = simpleTermVariable (variablePrefix++str)
 intTerm index = ArithmeticTerm (IntExpr index)
+getIntTerm (ArithmeticTerm (IntExpr idx)) = fromInteger idx  
 atomReduct ts = (CompositeAtom (BasicSymbol (predicatePrefix++"reduct")) ts)
 atomInAs ts = (CompositeAtom (BasicSymbol (predicatePrefix++"inAs")) ts)
 atomNinAs ts = (CompositeAtom (BasicSymbol (predicatePrefix++"ninAs")) ts)
@@ -38,7 +39,7 @@ getHypoSpaceP :: Program -> [Declaration]
 getHypoSpaceP (Task decls) = getHypoSpace decls
 
 isHypoAtom :: Atom -> Bool
-isHypoAtom (CompositeAtom (BasicSymbol hypoHead) [ArithmeticTerm (IntExpr _)]) = True 
+isHypoAtom (CompositeAtom (BasicSymbol h) _) | h == hypoHead = True 
 isHypoAtom _ = False
 
 getBackground :: [Declaration] -> [Declaration]
@@ -189,25 +190,36 @@ getVarsExpr (AbsExpr e1) = getVarsExpr e1
 getVarsExpr (Variable (VariableSymbol str)) = [str]
 getVarsExpr (IntExpr int) = []
 
-bindVarsLiteral :: Literal -> (ArithmeticExpr, Either Integer String) -> Literal
+type Binding = (ArithmeticExpr, BindingValue)
+data BindingValue = ValInt Integer | ValString String | ValTuple Term [Term]
+  deriving (Eq, Ord)
+
+bindVarsLiteral :: Literal -> Binding -> Literal
 bindVarsLiteral (PositiveLiteral at) bind = (PositiveLiteral (bindVarsAtom at bind))
 bindVarsLiteral (NegativeLiteral at) bind = (NegativeLiteral (bindVarsAtom at bind)) 
 bindVarsLiteral (ComparisonLiteral t1 cmp t2) bind = (ComparisonLiteral (bindVarsTerm t1 bind) cmp (bindVarsTerm t2 bind))
 
-bindVarsAtom :: Atom -> (ArithmeticExpr, Either Integer String) -> Atom
+
+bindsVarsAtom :: Atom -> [Binding] -> Atom
+bindsVarsAtom a [] = a
+bindsVarsAtom a (b:bs) = bindsVarsAtom (bindVarsAtom a b) bs
+
+bindVarsAtom :: Atom -> Binding -> Atom
 bindVarsAtom (SimpleAtom symbol) bind = (SimpleAtom symbol)
 bindVarsAtom (CompositeAtom symbol ts) bind = (CompositeAtom symbol (map (\x -> bindVarsTerm x bind) ts))
 
-bindVarsTerm :: Term -> (ArithmeticExpr, Either Integer String) -> Term
+bindVarsTerm :: Term -> Binding -> Term
 bindVarsTerm (Constant symbol) bind = (Constant symbol)
-bindVarsTerm (ArithmeticTerm expr) (e1, Left i) | expr == e1 = (ArithmeticTerm (IntExpr i))
-bindVarsTerm (ArithmeticTerm expr) (e1, Right str) | expr == e1 = (Constant (BasicSymbol str))
+bindVarsTerm (ArithmeticTerm expr) (e1, ValInt i) | expr == e1 = (ArithmeticTerm (IntExpr i))
+bindVarsTerm (ArithmeticTerm expr) (e1, ValString str) | expr == e1 = (Constant (BasicSymbol str))
+bindVarsTerm (ArithmeticTerm expr) (e1, ValTuple t pl) | expr == e1 = (TupleTerm t pl)
+
 bindVarsTerm (ArithmeticTerm expr) bind = (ArithmeticTerm (bindVarsExpr expr bind))
 bindVarsTerm (StringTerm str) bind = (StringTerm str)
 bindVarsTerm (TupleTerm t1 ts) bind = (TupleTerm (bindVarsTerm t1 bind) (map (\x -> bindVarsTerm x bind) (ts)) )
 bindVarsTerm (FunctionalTerm atom)  bind= (FunctionalTerm (bindVarsAtom atom bind))
 
-bindVarsExpr :: ArithmeticExpr -> (ArithmeticExpr, Either Integer String) -> ArithmeticExpr
+bindVarsExpr :: ArithmeticExpr -> Binding -> ArithmeticExpr
 bindVarsExpr (AddExpr e1 e2) bind = (AddExpr (bindVarsExpr' e1 bind) (bindVarsExpr' e2 bind))
 bindVarsExpr (SubExpr e1 e2) bind = (SubExpr (bindVarsExpr' e1 bind) (bindVarsExpr' e2 bind))
 bindVarsExpr (MulExpr e1 e2) bind = (MulExpr (bindVarsExpr' e1 bind) (bindVarsExpr' e2 bind))
@@ -215,10 +227,15 @@ bindVarsExpr (DivExpr e1 e2) bind = (DivExpr (bindVarsExpr' e1 bind) (bindVarsEx
 bindVarsExpr (NegExpr e1) bind = (NegExpr (bindVarsExpr' e1 bind))
 bindVarsExpr (AbsExpr e1) bind = (AbsExpr (bindVarsExpr' e1 bind))
 bindVarsExpr (IntExpr int) bind = (IntExpr int) 
-bindVarsExpr _ _ = error "error during binding"
+bindVarsExpr e _ = e
 
-bindVarsExpr' e (e1, Left i) | e == e1 = (IntExpr i)
+bindVarsExpr' e (e1, ValInt i) | e == e1 = (IntExpr i)
 bindVarsExpr' e bind = bindVarsExpr e bind
+
+isSameBindings::[Binding] -> [Binding] -> Bool 
+isSameBindings b1 b2 = s1 == s2
+  where s1 = Set.fromList b1
+        s2 = Set.fromList b2
 
 -----------------------------------------
 ---- evalAritmetics functions

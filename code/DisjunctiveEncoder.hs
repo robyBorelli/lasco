@@ -10,7 +10,10 @@ import Parser.PrintGrammar (printTree)
 import Data.List (nub,isPrefixOf)
 import Control.Monad.State
 import EncoderUtilities
+import Debug.Trace
 import Graph
+import qualified Data.HashSet        as HS
+import qualified Data.Map.Strict     as M
 
 encodeDisjunctive:: Program  -> Program
 encodeDisjunctive p@(Task decls)  = (Task (dummy ++ hypothesis ++ declPos ++ declNeg))
@@ -21,7 +24,7 @@ encodeDisjunctive p@(Task decls)  = (Task (dummy ++ hypothesis ++ declPos ++ dec
   (Task declPos) = if positiveExamples /= [] then encodeDisjunctivePositive p else (Task [])
   (Task declNeg) = if negativeExamples /= [] then encodeDisjunctiveNegative p else (Task [])
   hypoSpace = getHypoSpace decls
-  hypoChoice = [ (buildDisjunction [positiveVar . printTree . atomH $ [ intTerm  index], negativeVar . printTree . atomH $ [ intTerm  index]] ) | (index, _) <- getHypoIndexWeightList hypoSpace]
+  hypoChoice = [ (buildDisjunction [positiveVar . printTree . atomH $ [ intTerm  index], negativeVar . printTree . atomH $ [ intTerm  index] ] ) | (index, _) <- getHypoIndexWeightList hypoSpace]
   hypothesis = if negativeExamples == [] then ([Comment "hypothesis space"] ++ hypoChoice) else []
 
 encodeDisjunctivePositive :: Program -> Program
@@ -95,6 +98,24 @@ encodeExampleCovering index (LasExample incls excls) =
                        )))]
 encodeExampleCovering _ _ = error "Unsupported example type"
 
+{-iffFormula :: Program -> Formula
+iffFormula (Task decls) = makeConjunction ruleFormulas 
+ where
+  ruleFormulas = [ ruleFormula h (getBodies h) | h <- getAtoms ]
+  getAtoms :: [Atom]
+  getAtoms = filter (not . isHypoAtom) (nub ( foldr (++) [] [ nub ((h:[p | (PositiveLiteral p ) <- lits])++[n | (NegativeLiteral n ) <- lits]) | (AspRule (NormalRule (SimpleHead h) lits)) <- decls ] ))
+  getBodies :: Atom -> [[Parser.AbsGrammar.Literal]]
+  getBodies h = [ b | (AspRule (NormalRule (SimpleHead h1) b)) <- decls, h == h1 ]
+  ruleFormula h bss = case rhss bss of
+    FTrue -> (lhs h)
+    FFalse -> (Not . lhs $ h)
+    _ -> (Iff (lhs h) (rhss bss))
+
+  lhs h = (Atomic . Atom . printTree $ h)
+  rhss bss = makeDisjunction [ makeConjunction  (
+    [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- bs]
+    ++ [ (Atomic . NegAtom . printTree $ a) | (NegativeLiteral a) <- bs]) |  bs <- bss, bs /= [] ]
+-}
 iffFormula :: Program -> Formula
 iffFormula (Task decls) = makeConjunction ruleFormulas 
  where
@@ -109,42 +130,59 @@ iffFormula (Task decls) = makeConjunction ruleFormulas
     (Set.fromList getHeads) )
   getBodies :: Atom -> [[Parser.AbsGrammar.Literal]]
   getBodies h = [ b | (AspRule (NormalRule (SimpleHead h1) b)) <- decls, h == h1 ]
-  ruleFormula h bs = if (rhss bs /= true) 
+  ruleFormula h bs = if (rhss bs /= FTrue) 
     then (Iff (lhs h) (rhss bs))
     else (lhs h)
   lhs h = (Atomic . Atom . printTree $ h)
-  rhss [] = true
+  rhss [] = FTrue
   rhss ([]:bs) = rhss bs
   rhss bs = makeDisjunction (map rhs bs)
   rhs b = makeConjunction  bodyList 
     where bodyList = [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- b]
                   ++ [ (Atomic . NegAtom . printTree $ a) | (NegativeLiteral a) <- b]
 
+
 loopFormula :: Program -> (Formula, Int)
 loopFormula (Task decls) = (ret, length loops)
   where graph = buildGraph decls
         loops = findAllLoops graph
         ret = case loops of
-          [] -> true
+          [] -> FTrue
           _ -> makeConjunction [lf (filter (not . isHypoAtom) l) | l <- loops]
-        getBodies :: [Atom] -> [[Parser.AbsGrammar.Literal]]
-        getBodies hs = [ b | h <- hs, (AspRule (NormalRule (SimpleHead h1) b)) <- decls, h == h1, (atomIntersect hs b) == [] ]
+{-        getBodiesSlow :: [Atom] -> [[Parser.AbsGrammar.Literal]]
+        getBodiesSlow hs = [ b | h <- hs, (AspRule (NormalRule (SimpleHead h1) b)) <- decls, h == h1, (atomIntersect hs b) == [] ]
         atomIntersect :: [Atom] -> [Parser.AbsGrammar.Literal] -> [Atom]
         atomIntersect heads lits = ret
           where posAtoms = [at | (PositiveLiteral at) <- lits]
                 ret = Set.toList ((Set.fromList heads) `Set.intersection` (Set.fromList posAtoms))
+-}
+        compatible :: HS.HashSet Atom -> [Parser.AbsGrammar.Literal] -> Bool
+        compatible hS = all ok
+          where
+            ok (PositiveLiteral a) = not (HS.member a hS)
+            ok _                  = True 
+        getBodies :: [Atom] -> [[Parser.AbsGrammar.Literal]]
+        getBodies hs = concatMap bodiesOf hs
+          where
+            table :: M.Map Atom [[Parser.AbsGrammar.Literal]]
+            table = M.fromListWith (++) [ (h1,[b]) | AspRule (NormalRule (SimpleHead h1) b) <- decls ]
+            bodiesOf h = case M.lookup h table of
+                           Nothing -> []
+                           Just bs -> [ b | b <- bs, compatible (HS.fromList hs) b ]
+
         lf l = (Implies (lhs l) (rhs (getBodies l)))
         lhs hs = makeDisjunction [ (Atomic . Atom . printTree $ a) | a <- hs]
-        rhs litss = makeDisjunction' [
-                  makeConjunction' ( 
+        rhs litss = makeDisjunction [
+                  makeConjunction ( 
                      [ (Atomic . Atom . printTree $ a) | (PositiveLiteral a) <- lits]
                   ++ [ (Atomic . NegAtom . printTree $ a) | (NegativeLiteral a) <- lits] ) | lits <- litss]
+
 asFormula :: Program -> (Formula, Int)
-asFormula p = (ret, n)
-  where iff =(iffFormula p)
+asFormula p = (ret,n)
+  where iff = iffFormula p
         (loop, n) = (loopFormula p)
         ret = case loop of
-          res | res == true -> iff
+          FTrue -> iff
           _ ->  (And iff loop)
 
 negFormula :: Program -> Formula
@@ -184,11 +222,16 @@ eitterGottlob existentials universals f = (Task (
     disHeads = [ (buildDisjunction [positiveVar e, negativeVar e]) | e <- (existentials ++ universals) ]
     satUniversals = [ (buildNormalRule (positiveVar e) [sat] []) | e <- universals]
               ++ [ (buildNormalRule (negativeVar e) [sat] []) | e <- universals]
+              -- ++ [ (buildNormalRule lasco_true [] []) ]
     saturation = [ (AspRule (NormalRule (SimpleHead (SimpleAtom (BasicSymbol sat))) [(NegativeLiteral (SimpleAtom (BasicSymbol sat)))] )) ]
     formulaEncoding = buildClausesRules f
+    lasco_true = "lasco_lasco_true"
+    lasco_false = "lasco_lasc_false"
     buildClausesRulesMon :: Formula -> EncodingState ([Declaration], Var)
     buildClausesRulesMon (Atomic (Atom var)) = return ([], positiveVar var)
     buildClausesRulesMon (Atomic (NegAtom var)) = return ([], negativeVar var)
+    -- buildClausesRulesMon (FFalse) = return ([], lasco_false)
+    -- buildClausesRulesMon (FTrue) = return ([], lasco_true)
     buildClausesRulesMon (Or f1 f2) = do
       newFormula <- newFormula
       (decls1, v1) <- buildClausesRulesMon f1

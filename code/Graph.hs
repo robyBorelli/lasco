@@ -5,6 +5,7 @@ import qualified Data.Map as Map
 import Data.Array as Array
 import Data.List (subsequences, nub)
 import Parser.AbsGrammar
+import Debug.Trace
 
 -- DATA DEFINITIONS
 type AtomType = Atom
@@ -47,14 +48,16 @@ findAllLoops (graph, nodeFromVertex, vertexFromKey) = ret
   where sccs = stronglyConnCompR [ ((), v, graph Array.! v) | v <- vertices graph ]
         nonTrivialSCCs = [ map (\(_, v, _) -> v) vs | CyclicSCC vs <- sccs ]
         ret = concat
-           [ let atoms = map (fst3 . nodeFromVertex) scc
-             in [ loop
-                | subset <- powersetNonEmpty atoms
+           [ 
+              [ loop
+                | subset <- powersetNonEmpty (map (fst3 . nodeFromVertex) scc)
                 , Just verts <- [traverse vertexFromKey subset]
                 , isStronglyConnected verts graph
-                , let loop = map (fst3 . nodeFromVertex) verts
+                , loop <- [ map (fst3 . nodeFromVertex) verts ]
+                -- , traceShow ("loop Found") True
                 ]
-           | scc <- nonTrivialSCCs
+           | (idx,scc) <- zip [1..] nonTrivialSCCs
+           -- , traceShow ("scc Found ", idx, length nonTrivialSCCs, map (fst3 . nodeFromVertex) scc) True
            ]
 
 

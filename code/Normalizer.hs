@@ -54,14 +54,17 @@ convertChoiceNormalRules (NormalRule (ChoiceHead lb choices ub) body) | (foldr (
   processVars :: [String] -> [Term]
   processVars [] = []
   processVars (x:xs) = (FunctionalTerm (SimpleAtom (BasicSymbol (predicatePrefix++x)))):(simpleTermVariable x):(processVars xs)
+  bindings :: [Term]
+  bindings = (intTerm . toInteger . length $ vars) : (processVars vars)
   choiceToTerm :: ChoiceElem -> Term
   choiceToTerm (SimpleChoiceElem at) = (FunctionalTerm at)
   choiceToTerm _ = error "Unsupported guarded choice element"
   createGuardedRule :: Int -> ChoiceElem -> AspDeclaration
   createGuardedRule idx (GuardedChoiceElem at lits) = (NormalRule (SimpleHead newHead) (ltrue:(body++lits)))
-    where newHead = case at of
-                      (SimpleAtom (BasicSymbol s)) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) [intTerm . toInteger $ idx])
-                      (CompositeAtom (BasicSymbol s) ts) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) ((intTerm . toInteger $ idx):ts))
+    where
+        newHead = case at of
+                      (SimpleAtom (BasicSymbol s)) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) ([intTerm . toInteger $ idx]++bindings))
+                      (CompositeAtom (BasicSymbol s) ts) -> (CompositeAtom (BasicSymbol (choiceRuleGuardedHead++s)) ([intTerm . toInteger $ idx]++bindings++ts))
   createGuardedRule _ _ = error "Unsupported guarded choice element" 
   dummies = [createDummy c | c <- choices]
   createDummy (SimpleChoiceElem at) = (NormalRule (SimpleHead at) (ldummy:body))

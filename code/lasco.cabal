@@ -13,7 +13,11 @@ executable lasco
     text,
     process,
     mtl,
-    array
+    array,
+    deepseq,
+    transformers,
+    unordered-containers     >=0.2.20 && <0.3,
+    hashable                 >=1.4  && <1.5
   other-modules:
     DisjunctiveEncoder
     Encoder

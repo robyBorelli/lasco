@@ -69,7 +69,7 @@ Available options:
                              - 'first', 'all', or 'optimum'
                              - an integer (e.g. 3) for number of solutions
   -v,--verbose             Prints intermediate steps and debug information.
-  --no-comments            Disables comments in the generated encoding.
+  --enable-comments        Enables comments in the generated encoding.
   --show-hypos [i1,i2,...] Prints hypotheses of specified indexes and exits.
   -h,--help                Show this help text.
 ```
