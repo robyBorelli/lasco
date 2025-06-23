@@ -17,26 +17,26 @@ import EncoderUtilities
 import Printer
 import Control.DeepSeq (deepseq, NFData)
 import System.CPUTime (getCPUTime)
+import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import Text.Printf (printf)
 
 
 -- time measures
 timePure :: NFData a => a -> IO (Double, a)
 timePure expr = do
-  start <- getCPUTime
+  start <- getCurrentTime
   expr `deepseq` return ()
-  end <- getCPUTime
-  let elapsed :: Double
-      elapsed = fromIntegral (end - start) / (10^12)
+  end <- getCurrentTime
+  let elapsed = realToFrac (diffUTCTime end start) :: Double
   return (elapsed, expr)
 
 
 timeIO :: IO a -> IO (Double, a)
 timeIO action = do
-  start <- getCPUTime
+  start <- getCurrentTime
   result <- action
-  end <- getCPUTime
-  let elapsed = fromIntegral (end - start) / 1e12
+  end <- getCurrentTime
+  let elapsed = realToFrac (diffUTCTime end start) :: Double
   return (elapsed, result)
 
 
@@ -48,7 +48,7 @@ main = do
   putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
   putStrLn "%% -------------- LASCO --------------- %%\n"
   putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
-  tStart <- getCPUTime
+  tStart <- getCurrentTime
   Options{inputFile, outputFile, encoder, solver, solveMode, verbose, commenter, hypoPrinter} <- execParser opts
   let initialText = (case inputFile of 
                      (Nothing) -> "%% reading from stdin %%%%%%%%%%%%%%%%%%%\n"
@@ -83,7 +83,7 @@ main = do
                   )
               )
         Nothing -> do
-            (tGround, tEnc,tSolve) <- case getExamplesP normProg of
+            (tGround,tEnc,tSolve) <- case getExamplesP normProg of
               [] -> do
                       putStrLn "%% The task contain no examples %%%%%%%%%%"
                       return (0,0,0)
@@ -108,15 +108,14 @@ main = do
                         (Nothing) -> return 0
                         (Just solverType)  -> do
                           (tSolve, out) <- timeIO (solve solveMode solverType aspCode)
-                          --out' <- out
                           putStrLn out
                           return tSolve
 
                       return (tGround, tEnc,tSolve)
 
-            tEnd <- getCPUTime
+            tEnd <- getCurrentTime
             let tTotal:: Double 
-                tTotal = fromIntegral (tEnd - tStart) / (10^12)
+                tTotal = realToFrac (diffUTCTime tEnd tStart) :: Double
 
             putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
             putStrLn "%% ---------- ELAPSED TIME (s) -------- %%\n"
