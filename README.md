@@ -19,10 +19,11 @@ Precompiled binaries are available in the [GitHub Releases](https://github.com/r
 
 The LASCO binary depends on external ASP grounders and solvers for full functionality:
 
-- [gringo](https://potassco.org/gringo/) is required to solve tasks involving variables (i.e., non-ground programs).  
+- [gringo](https://potassco.org/clingo/) is required to solve tasks involving variables (i.e., non-ground programs).  
 - [clingo](https://potassco.org/clingo/) or [dlv](http://www.dlvsystem.com/dlv/) must be installed if you want to solve the compiled encoding directly using the `--solve` option.  
 
 *Note: Recommended versions of these tools are as follows. gringo 5.7.1; clingo 5.7.1; dlv 2.1.2*
+
 *Note: If no solver is specified, LASCO will only produce the ASP encoding without solving it.*
 
 ---
