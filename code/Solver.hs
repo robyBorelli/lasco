@@ -22,18 +22,19 @@ instance Show SolveMode where
   show (NumberModels int) = show int
 
 class Solve a where 
-  solve :: SolveMode -> a -> String -> IO String
+  solve :: SolveMode -> a -> Integer -> String -> IO String
 
 instance Solve Solver where
-  solve solverMode solverType asp = do
+  solve solverMode solverType threadNumber asp = do
     let prog = if solverType == Clingo then "clingo" else "dlv"
-    let cmd = proc prog [
+    let threadArg = if solverType == Clingo then ["-t "++(show threadNumber)] else []
+    let cmd = proc prog ([
                 case solverMode of
                    First -> "-n1"
                    All -> "-n0"
                    Optimum -> "-n0"
                    NumberModels int -> "-n"++(show int)
-               ]
+               ]++threadArg)
     (Just hin, Just hout, Just herr, ph) <- createProcess cmd { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe }
     hPutStr hin asp
     hClose hin

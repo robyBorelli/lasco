@@ -12,8 +12,9 @@ data Options = Options
   , encoder    :: EncoderType
   , solver     :: Maybe Solver
   , solveMode  :: SolveMode
-  --, silentMode :: Bool
+  , threadNumber :: Integer
   , verbose :: Bool
+  --, silentMode :: Bool
   , commenter  :: Bool
   , hypoPrinter:: Maybe [Integer]
   }
@@ -56,6 +57,21 @@ parseSolver "dlv"    = Right Dlv
 parseSolver ""       = Right defaultAspSolver
 parseSolver s        = Left $ "Wrong solver type."
 
+
+-- encoder threads
+threadsParser :: Parser Integer
+threadsParser = option (eitherReader parserThreads)
+  ( long "parallel-mode"
+   <> short 't'    
+   <> metavar "THREADS"
+   <> help ("Run parallel solving with given number of threads. (Works only with "++(show Clingo)++" SOLVER).")
+   <> value 1
+   <> showDefaultWith show )
+
+parserThreads :: String -> Either String Integer
+parserThreads s = case readMaybe s :: Maybe Int of
+                       Just num  -> Right (toInteger num)
+                       Nothing   -> Left "THREADS must be an integer."
 
 -- solveMode parser
 solveModeParser :: Parser SolveMode
@@ -109,6 +125,7 @@ optionsParser = Options
   <*> encoderParser
   <*> solverParser
   <*> solveModeParser
+  <*> threadsParser
   <*> switch
       ( long "verbose"
        <> short 'v'
@@ -120,7 +137,13 @@ optionsParser = Options
 
 -- parser info
 opts :: ParserInfo Options
-opts = info (optionsParser <**> helper)
+opts = info (optionsParser <**> versionOption <**> helper )
   ( fullDesc
  <> progDesc "Compiles a Learning from Answer Sets (LAS) task into an ASP program"
  <> header "lasco: the LAS → ASP compiler" )
+
+
+versionOption :: Parser (a -> a)
+versionOption = infoOption "0.0.6"
+  ( long "version"
+ <> help "Prints program version." )

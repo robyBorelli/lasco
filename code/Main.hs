@@ -49,7 +49,7 @@ main = do
   putStrLn "%% -------------- LASCO --------------- %%\n"
   putStrLn "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n"
   tStart <- getCurrentTime
-  Options{inputFile, outputFile, encoder, solver, solveMode, verbose, commenter, hypoPrinter} <- execParser opts
+  Options{inputFile, outputFile, encoder, solver, solveMode, threadNumber, verbose, commenter, hypoPrinter} <- execParser opts
   let initialText = (case inputFile of 
                      (Nothing) -> "%% reading from stdin %%%%%%%%%%%%%%%%%%%\n"
                      (Just inPath) -> "")
@@ -107,7 +107,7 @@ main = do
                       tSolve <- case solver of
                         (Nothing) -> return 0
                         (Just solverType)  -> do
-                          (tSolve, out) <- timeIO (solve solveMode solverType aspCode)
+                          (tSolve, out) <- timeIO (solve solveMode solverType threadNumber aspCode)
                           putStrLn out
                           return tSolve
 
