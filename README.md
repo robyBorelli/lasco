@@ -1,7 +1,8 @@
-# LASCO – LAS → ASP Compiler
+# LASCO - **L**earning from **A**nswer **S**ets **CO**mpiler
 
-**LASCO** (Learning from Answer Sets Compiler) is a tool that translates LAS tasks into ASP encodings.  
-It supports optional solving via Clingo or DLV and provides multiple encoding strategies.
+**LASCO**  is a tool that allows to compute inductive solutions of Learning from Answer Sets (LAS) tasks by genereating an ASP encoding that can be processed by state-of-the-art ASP solvers such as Clingo or DLV.
+
+Full details are provided in my [Master's Thesis](https://github.com/robyBorelli/CS-Master-Portfolio/blob/main/reports/m_thesis.pdf).
 
 ---
 
