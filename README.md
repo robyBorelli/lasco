@@ -2,6 +2,10 @@
 
 **LASCO**  is a tool that allows to compute inductive solutions of Learning from Answer Sets (LAS) tasks by genereating an ASP encoding that can be processed by state-of-the-art ASP solvers such as Clingo or DLV.
 
+Reference:
+
+Borelli, R., & Dovier, A. (2026). Learning from Answer Sets via Single-Shot Disjunctive ASP Encoding. Proceedings of the AAAI Conference on Artificial Intelligence, 40(23), 18961-18968. [https://doi.org/10.1609/aaai.v40i23.38967](https://doi.org/10.1609/aaai.v40i23.38967)
+
 Full details are provided in my [Master's Thesis](https://github.com/robyBorelli/CS-Master-Portfolio/blob/main/reports/m_thesis.pdf).
 
 ---
